@@ -1,0 +1,31 @@
+<script type="text/javascript">
+	function myFunction(xml1,xml2)
+	{
+		var td1=xml1.getAttribute("data-xml1-type");
+		var a1=escape("&lt;br/&gt;");
+		td1=td1.replace(/</g,"&lt;");
+		td1=td1.replace(/>/g,"&gt;");
+		
+		td1=td1.replace(new RegExp('&lt;br/&gt;', 'g'), '<br />');
+		td1=td1.replace(new RegExp('&lt;span style=\'color:darkorange\'&gt;', 'g'), '<span style=\'color:darkorange\'>');
+		td1=td1.replace(new RegExp('&lt;span style=\'color:#2E64FE\'&gt;', 'g'), '<span style=\'color:#2E64FE\'>');
+		td1=td1.replace(new RegExp('&lt;span style=\'color:fuchsia\'&gt;', 'g'), '<span style=\'color:fuchsia\'>');
+		td1=td1.replace(new RegExp('&lt;/span&gt;', 'g'), '</span>');
+		
+
+		var td2=xml2.getAttribute("data-xml2-type");
+		td2=td2.replace(/</g,"&lt;");
+		td2=td2.replace(/>/g,"&gt;");
+		
+		td2=td2.replace(new RegExp('&lt;br/&gt;', 'g'), '<br />');
+		td2=td2.replace(new RegExp('&lt;span style=\'color:darkorange\'&gt;', 'g'), '<span style=\'color:darkorange\'>');
+		td2=td2.replace(new RegExp('&lt;span style=\'color:#2E64FE\'&gt;', 'g'), '<span style=\'color:#2E64FE\'>');
+		td2=td2.replace(new RegExp('&lt;span style=\'color:fuchsia\'&gt;', 'g'), '<span style=\'color:fuchsia\'>');
+		td2=td2.replace(new RegExp('&lt;/span&gt;', 'g'), '</span>');
+
+		var myWindow = window.open("", "MsgWindow", "width=1000,height=1000");
+    	myWindow.document.write("<html><head><style>table, th, td {border: 1px solid black;}</style></head><body><table><tr><td>"+td1+"</td>"+"<td>"+td2+"</td></tr></table></body></html>");
+	}
+</script>
+</body>
+</html>

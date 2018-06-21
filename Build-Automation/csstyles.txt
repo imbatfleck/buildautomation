@@ -1,0 +1,13 @@
+<html>
+<head>
+	<title></title>
+	<style>
+table, th, td {
+    border: 1px solid black;
+}
+
+</style>
+<title>Site XML diff</title>
+
+  
+</head>
