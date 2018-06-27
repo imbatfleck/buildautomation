@@ -65,7 +65,7 @@ public class BuildAutomationApplication{
 			{
 				if(authStack.isEmpty())
 				{
-					
+					checkPoolForCreds();
 				}
 				else
 				{
@@ -162,6 +162,12 @@ public class BuildAutomationApplication{
 		//applicationContext.close();
 	}
 	
+	private static void checkPoolForCreds() {
+		// TODO Auto-generated method stub
+		
+		
+	}
+
 	public static void testAuth(String[] args) throws IOException
 	{
 		ConfigurableApplicationContext applicationContext=SpringApplication.run(BuildAutomationApplication.class, args);
