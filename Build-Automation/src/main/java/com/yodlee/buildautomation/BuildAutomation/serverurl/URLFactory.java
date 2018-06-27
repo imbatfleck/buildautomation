@@ -8,4 +8,5 @@ public class URLFactory {
 	public static final String TRIGGER_BATCH_URL="https://firemem.tools.yodlee.com/hammer/R/AB/TBR";
 	public static final String BATCH_STATUS_URL="https://firemem.tools.yodlee.com/hammer/R/AB/ABFBR";
 	public static final String BATCH_GETREQDET_URL="https://firemem.tools.yodlee.com/hammer/R/AB/ABS";
+	public static final String CREATE_BATCH_URL="https://firemem.tools.yodlee.com/hammer/R/AB/CB";
 }

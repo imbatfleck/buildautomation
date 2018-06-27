@@ -6,6 +6,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Utility {
 	
@@ -25,6 +27,19 @@ public class Utility {
 
 		String content = stringBuilder.toString();
 		return content;
+	}
+	
+	public static ArrayList<String> readFromFileList(String path) throws IOException
+	{
+		ArrayList<String> listItems=new ArrayList<>();
+		BufferedReader reader = new BufferedReader(new FileReader(path));
+		String line = null;
+		while ((line = reader.readLine()) != null) {
+			listItems.add(line);
+		}
+		reader.close();
+
+		return listItems;
 	}
 	public static boolean writeToFile(String fileName,String fileFormat,String fileContent)
 	{

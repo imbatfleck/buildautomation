@@ -1,14 +1,22 @@
 package com.yodlee.buildautomation.BuildAutomation.controller;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yodlee.buildautomation.BuildAutomation.authdetails.AuthenticationDeatils;
 import com.yodlee.buildautomation.BuildAutomation.authdetails.LoginResponseEntity;
+import com.yodlee.buildautomation.BuildAutomation.batchcreation.CBAddItemProps;
+import com.yodlee.buildautomation.BuildAutomation.batchcreation.CBProp;
+import com.yodlee.buildautomation.BuildAutomation.batchcreation.CBResponse;
 import com.yodlee.buildautomation.BuildAutomation.batchreqid.BatchReqDetailListID;
 import com.yodlee.buildautomation.BuildAutomation.batchreqid.BatchRequestID;
 import com.yodlee.buildautomation.BuildAutomation.batchreqid.BatchRequestIDResponse;
@@ -49,40 +57,47 @@ public class BuildOperation {
 	TriggerBatchResponse triggerBatchResponse=new TriggerBatchResponse();
 	BatchStatusResponse batchStatusResponse=new BatchStatusResponse();
 	BatchRequestIDResponse batchRequestIDResponse=new BatchRequestIDResponse();
+	CBResponse cbResponse=new CBResponse();
 	//BatchReqDetailList[] batchReqDetailList=new BatchReqDetailList();
 	
-	public String getToken(String url)
+	
+	public LoginResponseEntity getToken(String url)
 	{
 		AuthenticationDeatils authenticationDeatils=AuthenticationDeatils.setAuthDetails();
 		loginResponseEntity=restOperation.getPostResponseEntity(url,authenticationDeatils, loginResponseEntity, restTemplate);
 		String token=loginResponseEntity.getToken();
 		tokeValue=tokenAdder+token;
-		return tokeValue;
+		loginResponseEntity.setToken(tokeValue);
+		return loginResponseEntity;
 	}
 	
-	public String getBatchRequestId(String url,String batchName,int batchCount)
+	public BatchReqDetailListID getBatchRequestId(String url,String batchName,int batchCount) throws JsonProcessingException
 	{
+		BatchReqDetailListID batchReqDetailList=null;
 		String requestID=null;
 		String batchReqID=null;
 		String reqInitTime=null;
+		restOperation.setHeaders(httpHeaders, tokeValue);
 		BatchRequestID batchRequestID=BatchRequestID.setBatchRequestIDParam(batchName);
 		batchRequestIDResponse=restOperation.getPostResponseExchange(url, httpHeaders, batchRequestID, batchRequestIDResponse, restTemplate);
 		BatchReqDetailListID[] batchReqDetailListIDs=batchRequestIDResponse.getBatchReqDetailList();
 		for(BatchReqDetailListID bID:batchReqDetailListIDs)
 		{
-			requestID=bID.getAppReqId();
+			/*requestID=bID.getAppReqId();
 			reqInitTime=bID.getReqInitiated();
 			if(requestID.equals(batchAppIDMap.get(batchCount)))
 			{
 				batchReqID=bID.getBatchReqDetailsId();
 				batchReqIDMap.put("BATCH"+batchCount, batchReqID);
 				break;
-			}
+			}*/
+			batchReqDetailList=bID;
+			break;
 		}
-		return reqInitTime;
+		return batchReqDetailList;
 	}
 	
-	public void triggerBatch(String url,String batchID,int batchCount)
+	public TriggerBatchResponse triggerBatch(String url,String batchID,int batchCount,String custRoute) throws JsonProcessingException
 	{
 		TriggerRequest triggerRequest=TriggerRequest.setTriggerRequestParams(batchID);
 		restOperation.setHeaders(httpHeaders, tokeValue);
@@ -91,9 +106,10 @@ public class BuildOperation {
 		String appRequestId=triggerBatchResponse.getAppRequestId();
 		batchAppIDMap.put(batchCount, appRequestId);
 		System.out.println("+++++++++++++statusMsg="+statusMsg+"++++++++++++++++++appRequestId="+appRequestId);
+		return triggerBatchResponse;
 	}
 	
-	public String getStatusBatch(String url,int batchCount)
+	public String getStatusBatch(String url,int batchCount) throws JsonProcessingException
 	{
 		String batchReqID=batchReqIDMap.get("BATCH"+batchCount);
 		String batchStatusId=null;
@@ -108,7 +124,7 @@ public class BuildOperation {
 		return batchStatusId;
 	}
 	
-	public void doCompareBatches(String url) throws IOException
+	public void doCompareBatches(String url,String batchName) throws IOException
 	{
 	
 		String batchReq1=batchReqIDMap.get(BATCH_ONE);
@@ -122,10 +138,43 @@ public class BuildOperation {
 		String cssStyles=Utility.readFromFile("csstyles.txt");
 		String javaScript=Utility.readFromFile("javascript.txt");
 		String finalHTML=CompareBatchHTML.createFinalHTML(cssStyles,headerTable,bodyTable,javaScript);
-		boolean isWrote=Utility.writeToFile("index", "html", finalHTML);
+		boolean isWrote=Utility.writeToFile(batchName, "html", finalHTML);
 		
 	}
 
+	public void doCreateBatch(String url,String batchName,String batchDesc,String batchNickName,String fileName) throws IOException
+	{
+		CBProp cbProp=CBProp.setBatchValues(batchName,batchDesc,batchNickName, createItemList(fileName));
+		restOperation.setHeaders(httpHeaders, tokeValue);
+		cbResponse=restOperation.getPostResponseExchange(url, httpHeaders, cbProp, cbResponse, restTemplate);
+		System.out.println("++++++batch response="+cbResponse.getBatchName());
+		System.out.println("++++++batch status="+cbResponse.getStatusMsg());
+		
+	}
+	
+	
+	public static List<CBAddItemProps> createItemList(String fileName) throws IOException
+	{
+		List<CBAddItemProps> itemList=new ArrayList<>();
+		ArrayList<String> listItems=Utility.readFromFileList(fileName);
+		int i=1;
+		for(String item:listItems)
+		{
+			CBAddItemProps items=new CBAddItemProps();
+			String[] splitItem=item.split("/");
+			String itemId=splitItem[0];
+			String itemDb=splitItem[1];
+			
+			items.setItemId(itemId);
+			items.setDbName(itemDb);
+			items.setItemType("Cache Item Id");
+			items.setDescription("adding item "+i);
+			System.out.println("++++++++items:"+item);
+			itemList.add(items);
+			i++;
+		}
+		return itemList;
+	}
 	
 
 	private void printProps(BatchResult bc) {

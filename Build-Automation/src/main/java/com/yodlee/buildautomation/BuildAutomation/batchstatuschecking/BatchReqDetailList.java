@@ -4,6 +4,15 @@ public class BatchReqDetailList {
 	private String reqInitiated;
 	private String reqCompleted;
 	private String batchStatusId;
+	private String appReqId;
+	
+	
+	public String getAppReqId() {
+		return appReqId;
+	}
+	public void setAppReqId(String appReqId) {
+		this.appReqId = appReqId;
+	}
 	public String getReqInitiated() {
 		return reqInitiated;
 	}
