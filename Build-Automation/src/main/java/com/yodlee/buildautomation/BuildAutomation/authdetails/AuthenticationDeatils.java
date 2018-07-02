@@ -1,19 +1,6 @@
 package com.yodlee.buildautomation.BuildAutomation.authdetails;
 
-import java.util.Properties;
-
-import com.yodlee.buildautomation.BuildAutomation.ReadPropertiesFile;
-
 public class AuthenticationDeatils {
-	private static AuthenticationDeatils authenticationDeatils=new AuthenticationDeatils();
-	private static final String AUTH_DETAIL_USERNAME_KEY="username";
-	private static final String AUTH_DETAIL_PASSWORD_KEY="password";
-	
-	private static final String AUTH_DETAIL_PROP_FILE="authdetails.properties";
-	
-	private static Properties buildProps = ReadPropertiesFile.getProperties(AUTH_DETAIL_PROP_FILE);
-	private static String userDetail=buildProps.getProperty(AUTH_DETAIL_USERNAME_KEY);
-	private static String passDetail=buildProps.getProperty(AUTH_DETAIL_PASSWORD_KEY);
 	
 	private String username;
 	private String password;
@@ -37,13 +24,5 @@ public class AuthenticationDeatils {
 	public void setPassword(String password) {
 		this.password = password;
 	}
-	
-	public static AuthenticationDeatils setAuthDetails()
-	{
-		authenticationDeatils.setUsername(userDetail);
-		authenticationDeatils.setPassword(passDetail);
-		return authenticationDeatils;
-	}
-	
 	
 }

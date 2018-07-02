@@ -5,8 +5,17 @@ public class BatchReqDetailList {
 	private String reqCompleted;
 	private String batchStatusId;
 	private String appReqId;
+	private String userName;
 	
 	
+	
+	
+	public String getUserName() {
+		return userName;
+	}
+	public void setUserName(String userName) {
+		this.userName = userName;
+	}
 	public String getAppReqId() {
 		return appReqId;
 	}

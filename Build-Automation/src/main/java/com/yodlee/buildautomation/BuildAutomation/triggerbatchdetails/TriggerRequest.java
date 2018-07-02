@@ -42,7 +42,7 @@ public class TriggerRequest {
 		super();
 	}
 	
-	public static TriggerRequest setTriggerRequestParams(String batchID)
+	public static TriggerRequest setTriggerRequestParams(String batchID,String custRoute)
 	{
 		statementRequest.setStmtDurationType("");
 		statementRequest.setTaxDurationType("");
@@ -63,14 +63,13 @@ public class TriggerRequest {
 		
 		batchRefreshParam.setRequestTypes(new String[]{});
 		batchRefreshParam.setServerType("I");
-		batchRefreshParam.setCustomrefreshRoute("C");
+		batchRefreshParam.setCustomrefreshRoute(custRoute);
 		batchRefreshParam.setAgentFileType("JAVA");
 		batchRefreshParam.setRefreshRoute("D");
 		batchRefreshParam.setIgnoreWarnings(true);
 		batchRefreshParam.setIavRequest(iavRequest);
 		batchRefreshParam.setDocDownloadRequest(docDownloadRequest);
 		
-		triggerRequest.setUserName("mrao2");
 		triggerRequest.setAgentName("");
 		triggerRequest.setBatchRefreshParams(batchRefreshParam);
 		triggerRequest.setBatchDetailsId(batchID);

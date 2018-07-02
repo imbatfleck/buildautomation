@@ -25,17 +25,13 @@ public class DAPMaster{
 	public LinkedHashSet<BatchDetails> getBatchDetailsInfo() {
 		
 		
-		System.out.println("+++++++++++build details="+buildDetails);
 		String[] batchList=buildDetails.split(",");
 		for(String bat:batchList)
 		{
-			System.out.println("Inf loop");
 			BatchDetails batchDetails=new BatchDetails();
-			System.out.println("+++++++++batch List="+bat);
 			String[] batchDet=bat.split("\\|");
 			batchDetails.setBatchName(batchDet[0]);
 			batchDetails.setBatchID(batchDet[1]);
-			System.out.println("inf loop 2");
 			batchDeatilSet.add(batchDetails);
 		}
 		
