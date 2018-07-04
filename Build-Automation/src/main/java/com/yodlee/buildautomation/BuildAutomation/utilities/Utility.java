@@ -6,7 +6,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 public class Utility {
@@ -72,7 +76,15 @@ public class Utility {
 		}
 		return isSuccssWrite;
 	}
-	
+	public static long getCurrentTImeStamp() throws ParseException
+	{
+		 Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+		 String str=timestamp.toString();
+	     SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+	     Date date = df.parse(str);
+	     long epoch = date.getTime();
+	     return epoch;
+	}
 	public static String createHtml()
 	{
 		return null;

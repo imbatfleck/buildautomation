@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -37,6 +38,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.web.client.HttpClientErrorException;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.yodlee.buildautomation.BuildAutomation.authdetails.AuthenticationDeatils;
 import com.yodlee.buildautomation.BuildAutomation.authdetails.LoginResponseEntity;
@@ -46,15 +49,21 @@ import com.yodlee.buildautomation.BuildAutomation.comparebatchdetails.AfterCompa
 import com.yodlee.buildautomation.BuildAutomation.controller.BuildOperation;
 import com.yodlee.buildautomation.BuildAutomation.serverurl.URLFactory;
 import com.yodlee.buildautomation.BuildAutomation.triggerbatchdetails.TriggerBatchResponse;
+import com.yodlee.buildautomation.BuildAutomation.utilities.Utility;
 
 @SpringBootApplication
 public class BuildAutomationApplication{
 	
 	public static final Logger logger=LoggerFactory.getLogger(BuildAutomationApplication.class);
 	public static ConcurrentHashMap<String,String> requestMapper=new ConcurrentHashMap();
+	public static HashMap<String, String> requestInitTimeMapper=new HashMap<>();
+	private static final String REQ_STATUS_COMPLETED="completed";
+	private static final String REQ_STATUS_PENDING="pending";
 	private static Stack<AuthenticationDeatils> authStack=new Stack<>();
+	private static Stack<AuthenticationDeatils> reservedAuthStack=new Stack<>();
 	private static List<AuthenticationDeatils> authList=new ArrayList<>();
 	private static final ArrayList<String> custRouteList=new ArrayList<>();
+	private static final HashMap<String,String> requestStatusMap=new HashMap<>();
 	private static Properties emailProps = ReadPropertiesFile.getProperties("email.properties");
 	private static CopyOnWriteArrayList<String> requestList=new CopyOnWriteArrayList<>();
 	private static long latestRequestStartTime=0;
@@ -63,11 +72,15 @@ public class BuildAutomationApplication{
 	public static int batchProcessCount=0;
 	
 	
-	public static void setBatchParams(String batchName,String batchID,String[] args) throws IOException, InterruptedException, MessagingException
+	public static void setBatchParams(String batchName,String batchID,String[] args) throws IOException, InterruptedException, MessagingException, ParseException
 	{
 		ConfigurableApplicationContext applicationContext=SpringApplication.run(BuildAutomationApplication.class, args);
 		logger.info("Build regression application has started");
 		BuildOperation buildOperation=applicationContext.getBean(BuildOperation.class);
+		TriggerBatchResponse triggerBatchResponse=null;
+		BatchReqDetailListID batchReqDetailListID=null;
+		String userName=null;
+		
 	
 		for(String custRoute: custRouteList)
 		{
@@ -76,17 +89,20 @@ public class BuildAutomationApplication{
 			boolean isBatchTriggered=false;
 			while(!isBatchTriggered)
 			{
+				boolean isPicked=false;
 				if(authStack.isEmpty())
 				{
 					logger.info("Auth pool is empty",authStack);
 					long startTime=latestRequestStartTime;
-					long endTime=startTime+(60000*25);
+					long endTime=startTime+(60000*30);
+					int i=0;
 					while(!(startTime>=endTime)){
-						logger.info("Polling auth pool for credentials");
+						logger.info("Polling auth pool for credentials - {}",i);
 						int poolSize=checkPoolForCreds(buildOperation);
 						logger.info("Pool Size - {}",poolSize);
 						if(poolSize>0)
 						{
+							isPicked=true;
 							logger.info("Succeful polling");
 							logger.info("Pool Size - {}",poolSize);
 							logger.info("Username picked - {}",authStack.peek().getUsername());
@@ -95,6 +111,46 @@ public class BuildAutomationApplication{
 						logger.info("Auth pool is busy, sleeping for 1 minute");
 						startTime=startTime+60000;
 						Thread.sleep(60000);
+						i++;
+					}
+					if(!isPicked)
+					{
+						logger.info("Auth is busy so batch could not picked- Hence checking time initiated");
+						for(String req:requestList)
+						{
+							long initTime=Long.valueOf(requestInitTimeMapper.get(req));
+							long targetTime=Utility.getCurrentTImeStamp();
+							long checkTime=targetTime-initTime;
+							double minCheckTime=((checkTime/1000)/60.00);
+							logger.info("Minute time - {}",minCheckTime);
+							
+							if(checkTime>30)
+							{
+								try
+								{
+									BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,req);
+									userName=batchReqDetail.getUserName();
+								}
+								catch(HttpClientErrorException he)
+								{
+									if(he.getMessage().contains("408"))
+									{
+										buildOperation.getToken(URLFactory.LOGIN_URL, reservedAuthStack.peek());
+										BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,req);
+										userName=batchReqDetail.getUserName();
+									}
+								}
+								for(AuthenticationDeatils authenticationDeatils: authList)
+								{
+									if(authenticationDeatils.getUsername().equals(userName))
+									{
+											authStack.push(authenticationDeatils);
+											requestList.remove(req);
+											break;
+									}
+								}
+							}
+						}
 					}
 				}
 				else
@@ -104,7 +160,19 @@ public class BuildAutomationApplication{
 					logger.info("picked up credential from pool - {}",authenticationDeatils.getUsername());
 					LoginResponseEntity loginResponseEntity=buildOperation.getToken(URLFactory.LOGIN_URL,authenticationDeatils);
 					logger.info("Token Created - {}",loginResponseEntity.getToken());
-					TriggerBatchResponse triggerBatchResponse=buildOperation.triggerBatch(URLFactory.TRIGGER_BATCH_URL, batchID,custRoute);
+					
+					try
+					{
+						 triggerBatchResponse=buildOperation.triggerBatch(URLFactory.TRIGGER_BATCH_URL, batchID,custRoute);
+					}
+					catch(HttpClientErrorException he)
+					{
+						if(he.getMessage().contains("408"))
+						{
+							buildOperation.getToken(URLFactory.LOGIN_URL, reservedAuthStack.peek());
+							triggerBatchResponse=buildOperation.triggerBatch(URLFactory.TRIGGER_BATCH_URL, batchID,custRoute);
+						}
+					}
 					logger.info("User is triggering batch - {}",batchName);
 					logger.info("Batch trigger status message",triggerBatchResponse.getStatusMsg());
 					String appReqID=triggerBatchResponse.getAppRequestId();
@@ -112,7 +180,18 @@ public class BuildAutomationApplication{
 					if(appReqID!=null && !appReqID.equals("REJECTED"))
 					{
 						logger.info("Batch successfully triggered");
-						BatchReqDetailListID batchReqDetailListID=buildOperation.getBatchRequestId(URLFactory.BATCH_GETREQID_URL,batchName,appReqID);
+						try
+						{
+							 batchReqDetailListID=buildOperation.getBatchRequestId(URLFactory.BATCH_GETREQID_URL,batchName,appReqID);
+						}
+						catch(HttpClientErrorException he)
+						{
+							if(he.getMessage().contains("408"))
+							{
+								buildOperation.getToken(URLFactory.LOGIN_URL, reservedAuthStack.peek());
+								batchReqDetailListID=buildOperation.getBatchRequestId(URLFactory.BATCH_GETREQID_URL,batchName,appReqID);
+							}
+						}
 						if(custRoute.equals("C"))
 						{	
 							logger.info("Batch Trigger Environment - {}","Developer");
@@ -127,6 +206,7 @@ public class BuildAutomationApplication{
 						}
 						logger.info("Batch Request ID - {}",batchReqDetailListID.getBatchReqDetailsId());
 						requestList.add(batchReqDetailListID.getBatchReqDetailsId());
+						requestInitTimeMapper.put(batchReqDetailListID.getBatchReqDetailsId(), batchReqDetailListID.getReqInitiated());
 						logger.info("Batch Request List - {}",requestList);
 						isBatchTriggered=true;
 						latestRequestStartTime=Long.valueOf(batchReqDetailListID.getReqInitiated());
@@ -160,15 +240,28 @@ public class BuildAutomationApplication{
 			String statusID=statusMap.get(reqID1);
 			if(statusID==null)
 			{
-				BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID1);
+				try
+				{
+					BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID1);
+				}
+				catch(HttpClientErrorException he)
+				{
+					if(he.getMessage().contains("408"))
+					{
+						buildOperation.getToken(URLFactory.LOGIN_URL, reservedAuthStack.peek());
+						BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID1);
+					}
+				}
 			}
 		}
+		logger.info("Status Map - {}",statusMap);
 		logger.info("Total Batch Request Size - {}",processMap.size());
 		logger.info("Total Batch Size - {}",batchProcessCount);
 		
 		if(processMap.size()==batchProcessCount)
 		{
-			long startTime=latestRequestStartTime;
+			long startTime=1530540164000l;
+			//long endTime=startTime+(60000*25);
 			long endTime=startTime+(60000*25);
 			while(!(startTime>=endTime)){
 				if(requestMapper.size()==0)
@@ -177,9 +270,25 @@ public class BuildAutomationApplication{
 				}
 				for(String reqID:requestMapper.keySet())
 				{
-					BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID);
+					logger.info("Request Nav - {}",reqID);
+					try
+					{
+						BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID);
+					}
+					catch(HttpClientErrorException he)
+					{
+						if(he.getMessage().contains("408"))
+						{
+							if(authStack.size()==0)
+							{
+								createAuthPool();
+							}
+							buildOperation.getToken(URLFactory.LOGIN_URL, authStack.peek());
+							BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID);
+						}
+					}
 				}
-				if(!compareBatches(buildOperation))
+				if(!compareBatches(buildOperation,true))
 				{
 					logger.info("waiting for batch request completion");
 					startTime=startTime+60000;
@@ -191,18 +300,29 @@ public class BuildAutomationApplication{
 				}
 			}
 		}
+		if(processMap.size()==batchProcessCount 
+				&& requestMapper.size()!=0)
+		{
+			for(String request:requestMapper.keySet())
+			{
+				logger.info("Pending Request - {}",request);
+				compareBatches(buildOperation,false);
+			}
+		}
 		
 	}
 	
-	private static boolean compareBatches(BuildOperation buildOperation) throws IOException, MessagingException
+	private static boolean compareBatches(BuildOperation buildOperation,boolean checkStatus) throws IOException, MessagingException
 	{
 		boolean isCompared=false;
+		AfterCompareResponse afterCompareResponse=null;
 		for(String reqID1:requestMapper.keySet())
 		{
 			logger.info("Request Mapper - {}",requestMapper);
 			logger.info("Request ID - {}",reqID1);
 			String statID=statusMap.get(reqID1);
-			if(!statID.equals("5"))
+			
+			if(checkStatus && !statID.equals("5"))
 			{
 				continue;
 			}
@@ -230,7 +350,7 @@ public class BuildAutomationApplication{
 			for(String reqID2:requestMapper.keySet())
 			{
 				String statID2=statusMap.get(reqID2);
-				if(!statID2.equals("5"))
+				if(checkStatus && !statID2.equals("5"))
 				{
 					continue;
 				}
@@ -264,7 +384,18 @@ public class BuildAutomationApplication{
 			}
 			if(batchReqDev!=null && batchReqReg!=null)
 			{
-				AfterCompareResponse afterCompareResponse=buildOperation.doCompareBatches(URLFactory.COMPARE_BATCH_URL, batch, batchReqDev, batchReqReg);
+				try
+				{
+					 	afterCompareResponse=buildOperation.doCompareBatches(URLFactory.COMPARE_BATCH_URL, batch, batchReqDev, batchReqReg);
+				}
+				catch(HttpClientErrorException he)
+				{
+					if(he.getMessage().contains("408"))
+					{
+						buildOperation.getToken(URLFactory.LOGIN_URL, reservedAuthStack.peek());
+						afterCompareResponse=buildOperation.doCompareBatches(URLFactory.COMPARE_BATCH_URL, batch, batchReqDev, batchReqReg);
+					}
+				}
 				logger.info("Request processed");
 				sendMail(afterCompareResponse.getFinalHTML(),batch,afterCompareResponse.isWrote());
 				logger.info("Mail Sent");
@@ -273,6 +404,8 @@ public class BuildAutomationApplication{
 				logger.info("Removed Request ID - {}",batchReqDev);
 				requestMapper.remove(batchReqReg);
 				logger.info("Removed Request ID - {}",batchReqReg);
+				requestStatusMap.put(batchReqDev, REQ_STATUS_COMPLETED);
+				requestStatusMap.put(batchReqReg, REQ_STATUS_COMPLETED);
 				isCompared=true;
 				break;
 			}
@@ -352,10 +485,21 @@ public class BuildAutomationApplication{
 	}
 
 	private static int checkPoolForCreds(BuildOperation buildOperation) throws JsonProcessingException {
-		
+		BatchReqDetailList batchReqDetail=null;
 		for(String reqID:requestList)
 		{
-			BatchReqDetailList batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID);
+			try
+			{
+				 batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID);
+			}
+			catch(HttpClientErrorException he)
+			{
+				if(he.getMessage().contains("408"))
+				{
+					buildOperation.getToken(URLFactory.LOGIN_URL, reservedAuthStack.peek());
+					batchReqDetail=buildOperation.getStatusBatch(URLFactory.BATCH_STATUS_URL,reqID);
+				}
+			}
 			if(batchReqDetail.getBatchStatusId().equals("5"))
 			{
 				for(AuthenticationDeatils authenticationDeatils: authList)
@@ -419,6 +563,7 @@ public class BuildAutomationApplication{
 	                    i++;
 	                }
 	                authList.add(authenticationDeatils);
+	                reservedAuthStack.add(authenticationDeatils);
             	
                 j++;
             }
@@ -453,5 +598,12 @@ public class BuildAutomationApplication{
 	{
 		custRouteList.add("C");
 		custRouteList.add("R");
+	}
+	
+	public static void createBatch() throws IOException
+	{
+		BuildOperation buildOperation=new BuildOperation();
+		buildOperation.getToken(URLFactory.LOGIN_URL, authStack.peek());
+		buildOperation.doCreateBatch(URLFactory.CREATE_BATCH_URL,"DagBase", "736BuildShelv", "736BuildShelv", "itemlist5.txt");
 	}
 }
